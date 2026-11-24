@@ -10,11 +10,11 @@
 
 | Role | Full Name | Student ID | Braude Academic Email |
 | :--- | :--- | :--- | :--- |
-| **Student A (Role A)** | `[Enter Student A Full Name]` | `[Enter ID]` | `[studentA@e.braude.ac.il]` |
-| **Student B (Role B)** | `[Enter Student B Full Name]` | `[Enter ID]` | `[studentB@e.braude.ac.il]` |
+| **Student A (Role A)** | Dvir Klein | 318931169 | dvir.klein@e.braude.ac.il |
+| **Student B (Role B)** | Denis Zuravlov | 318547007 | denis.zuravlov@e.braude.ac.il |
 
 * **Group Number:** `G[XX]`
-* **GitHub Repository URL:** `https://github.com/[Username]/Ex4_SmartParking_Design`
+* **GitHub Repository URL:** `https://github.com/dvirklein/Ex4_SmartParking_Design`
 
 ---
 
