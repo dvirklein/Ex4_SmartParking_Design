@@ -1,0 +1,85 @@
+@startuml
+actor Student
+boundary ":StudentDashboardUI" as UI
+control ":ReservationControl" as Ctrl
+entity "spot : ParkingSpot" as Spot
+entity "res : Reservation" as Res
+entity "user : User" as User
+boundary ":LprGateBoundary" as LPR
+
+Student -> UI : onReserveSpotClicked("EV-04", "12-345-67")
+activate UI
+UI -> Ctrl : reserveSpot(userId, "EV-04", "12-345-67")
+activate Ctrl
+Ctrl -> Spot : isAvailable()
+activate Spot
+Spot --> Ctrl : available
+deactivate Spot
+
+alt available == true
+  Ctrl -> Spot : tryReserve(expectedVersion)
+  activate Spot
+  Spot --> Ctrl : acquired
+  deactivate Spot
+  alt acquired == true
+    create Res
+    Ctrl --> Res : <<create>> Reservation(userId, "EV-04", "12-345-67")
+    activate Res
+    deactivate Res
+    Ctrl --> UI : res
+    deactivate Ctrl
+    UI -> UI : displayCountdown(15)
+    activate UI
+    deactivate UI
+  else (Concurrent Race Condition)
+    Ctrl --> UI : null
+    deactivate Ctrl
+    UI -> UI : showErrorAlert("Spot just reserved by another user")
+    activate UI
+    deactivate UI
+  end
+else available == false
+  Ctrl --> UI : null
+  deactivate Ctrl
+  UI -> UI : showErrorAlert("Spot unavailable")
+  activate UI
+  deactivate UI
+end
+deactivate UI
+
+== Within 15 Minutes: Vehicle Arrives at Entrance Gate ==
+
+LPR -> Ctrl : processLprGateEntry("12-345-67", "EV Zone")
+activate Ctrl
+Ctrl -> Res : isWithin15MinWindow()
+activate Res
+Res --> Ctrl : valid
+deactivate Res
+
+alt valid == true
+  Ctrl -> Res : setStatus(FULFILLED)
+  activate Res
+  deactivate Res
+  Ctrl -> LPR : openBarrierGate()
+  activate LPR
+  deactivate LPR
+else (No-Show > 15 Min)
+  Ctrl -> Res : setStatus(NO_SHOW_REVOKED)
+  activate Res
+  deactivate Res
+  Ctrl -> Spot : setStatus(AVAILABLE)
+  activate Spot
+  deactivate Spot
+  Ctrl -> User : incrementNoShowWarnings()
+  activate User
+  deactivate User
+  Ctrl -> Res : <<destroy>>
+  activate Res
+  deactivate Res
+  destroy Res
+  Ctrl -> LPR : denyEntry()
+  activate LPR
+  deactivate LPR
+end
+deactivate Ctrl
+@enduml

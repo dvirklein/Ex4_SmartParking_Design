@@ -1,0 +1,12 @@
+# IntelliJ IDE files
+.idea/
+*.iml
+
+# Visual Paradigm backup & lock files
+*.vpp.bak
+*.vpp.bak_*
+*.vpp.lck
+
+# OS metadata
+.DS_Store
+Thumbs.db

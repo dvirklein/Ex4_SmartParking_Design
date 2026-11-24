@@ -1,0 +1,225 @@
+@startuml
+
+enum UserRole {
+  STUDENT
+  FACULTY
+  SECURITY_GUARD
+  TRAFFIC_ADMIN
+}
+
+enum SpotStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+}
+
+enum ReservationStatus {
+  ACTIVE
+  FULFILLED
+  NO_SHOW_REVOKED
+}
+
+enum AppealDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+class StudentDashboardUI <<boundary>> {
+  - selectedZone: String
+  + displayAvailableSpots(spots: List): void
+  + onReserveSpotClicked(spotId: String, licensePlate: String): void
+  + onSubmitAppealClicked(violationId: String, reasonText: String): void
+  + displayCountdown(minutes: int): void
+  + showErrorAlert(message: String): void
+}
+
+class GuardTerminalUI <<boundary>> {
+  + onLogViolationClicked(licensePlate: String, reason: String): void
+  + onIssueGuestQrClicked(guestPlate: String): void
+}
+
+class AdminAppealUI <<boundary>> {
+  + onReviewAppealClicked(appealId: String, decision: AppealDecision): void
+}
+
+class LprGateBoundary <<boundary>> {
+  + onPlateScanned(licensePlate: String, gateId: String): void
+  + onGuestQrScanned(qrToken: String): void
+  + openBarrierGate(): void
+  + denyEntry(): void
+}
+
+class PaymentGatewayBoundary <<boundary>> {
+  + authorizeCreditCard(amount: BigDecimal): String
+}
+
+class SmsGatewayBoundary <<boundary>> {
+  + sendSmsAlert(phoneNumber: String, message: String): void
+}
+
+class ReservationControl <<control>> {
+  - reservationWindowMin: int
+  + findAvailableSpots(userId: String, zoneId: String): List
+  + reserveSpot(userId: String, spotId: String, licensePlate: String): Reservation
+  + processLprGateEntry(licensePlate: String, gateId: String): void
+  + validateGuestQrEntry(qrToken: String): boolean
+  + revokeExpiredReservations(): void
+}
+
+class EvBillingControl <<control>> {
+  - idleGraceMin: int
+  - idleRateNisPerHour: BigDecimal
+  + authorizeEvPayment(reservationId: String): PaymentAuthorization
+  + notifyChargeComplete(sessionId: String): void
+  + applyIdlePenalties(): void
+}
+
+class EnforcementControl <<control>> {
+  + issueGuestPass(guestPlate: String): GuestPass
+  + logSevereViolation(licensePlate: String, reason: String): Violation
+  + submitDigitalAppeal(violationId: String, reasonText: String): Appeal
+  + reviewDigitalAppeal(appealId: String, decision: AppealDecision): void
+}
+
+abstract class User <<entity>> {
+  - userId: String
+  - fullName: String
+  - email: String
+  - phoneNumber: String
+  - role: UserRole
+  - noShowWarnings: int
+  + incrementNoShowWarnings(): void
+}
+
+class Student <<entity>> {
+  - studentId: String
+  - activePermit: boolean
+  + hasActivePermit(): boolean
+}
+
+class Faculty <<entity>> {
+  - facultyId: String
+  - department: String
+  - activePermit: boolean
+  + hasActivePermit(): boolean
+}
+
+class SecurityGuard <<entity>> {
+  - badgeNumber: String
+}
+
+class TrafficAdministrator <<entity>> {
+  - adminOfficeId: String
+}
+
+class GuestPass <<entity>> {
+  - qrToken: String
+  - guestPlate: String
+  - expiresAt: LocalDateTime
+  - isUsed: boolean
+  + isValid(now: LocalDateTime): boolean
+  + markUsed(): void
+}
+
+class Vehicle <<entity>> {
+  - licensePlate: String
+}
+
+class ParkingZone <<entity>> {
+  - zoneId: String
+  - zoneName: String
+  - totalCapacity: int
+}
+
+class ParkingSpot <<entity>> {
+  - spotId: String
+  - isEvCharger: boolean
+  - status: SpotStatus
+  - version: int
+  + isAvailable(): boolean
+  + tryReserve(expectedVersion: int): boolean
+  + setStatus(newStatus: SpotStatus): void
+}
+
+class Reservation <<entity>> {
+  - reservationId: String
+  - createdAt: LocalDateTime
+  - expiresAt: LocalDateTime
+  - status: ReservationStatus
+  + isWithin15MinWindow(): boolean
+  + setStatus(newStatus: ReservationStatus): void
+}
+
+class PaymentAuthorization <<entity>> {
+  - authId: String
+  - gatewayToken: String
+  - authorizedAmount: BigDecimal
+  - authorizedAt: LocalDateTime
+}
+
+class ChargingSession <<entity>> {
+  - sessionId: String
+  - completedAt: LocalDateTime
+  - isPluggedIn: boolean
+  - isPhysicallyOccupied: boolean
+  - idlePenaltyNis: BigDecimal
+  + isIdleOver30Minutes(): boolean
+}
+
+class Violation <<entity>> {
+  - violationId: String
+  - reason: String
+  - fineAmount: BigDecimal
+  - isPaid: boolean
+  + cancelFine(): void
+}
+
+class Appeal <<entity>> {
+  - appealId: String
+  - reasonText: String
+  - decision: AppealDecision
+  + setDecision(newDecision: AppealDecision): void
+}
+
+User <|-- Student
+User <|-- Faculty
+User <|-- SecurityGuard
+User <|-- TrafficAdministrator
+
+ParkingZone "1" o-- "1..*" ParkingSpot : contains
+Reservation "1" *-- "0..1" PaymentAuthorization : requires for EV
+Reservation "1" *-- "0..1" ChargingSession : initiates
+Violation "1" *-- "0..1" Appeal : contested by
+
+User "1" -- "0..*" Vehicle : owns
+Vehicle "1" -- "0..*" Reservation : booked for
+ParkingSpot "1" -- "0..*" Reservation : assigned to
+Vehicle "1" -- "0..*" Violation : receives
+SecurityGuard "0..1" -- "0..*" Violation : logs
+SecurityGuard "1" -- "0..*" GuestPass : issues
+TrafficAdministrator "0..1" -- "0..*" Appeal : reviews
+
+StudentDashboardUI "1" -- "1" ReservationControl : requests reservations
+StudentDashboardUI "1" -- "1" EnforcementControl : submits appeals
+GuardTerminalUI "1" -- "1" EnforcementControl : logs violations and issues guest passes
+AdminAppealUI "1" -- "1" EnforcementControl : requests appeal reviews
+LprGateBoundary "1" -- "1" ReservationControl : reports scans
+PaymentGatewayBoundary "1" -- "1" EvBillingControl : authorizes payments
+SmsGatewayBoundary "1" -- "1" EvBillingControl : sends alerts
+
+ReservationControl "1" -- "0..*" User : manages reservations for
+ReservationControl "1" -- "0..*" Vehicle : processes vehicle entry for
+ReservationControl "1" -- "0..*" ParkingZone : searches
+ReservationControl "1" -- "0..*" ParkingSpot : reserves
+ReservationControl "1" -- "0..*" Reservation : creates and revokes
+ReservationControl "1" -- "0..*" GuestPass : validates
+EvBillingControl "1" -- "0..*" PaymentAuthorization : creates
+EvBillingControl "1" -- "0..*" ChargingSession : manages
+EvBillingControl "1" -- "0..*" Violation : creates idle penalties
+EnforcementControl "1" -- "0..*" Vehicle : enforces violations for
+EnforcementControl "1" -- "0..*" GuestPass : issues
+EnforcementControl "1" -- "0..*" Violation : logs
+EnforcementControl "1" -- "0..*" Appeal : manages
+
+@enduml
